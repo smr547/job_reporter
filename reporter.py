@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 import sys
 import re
-class Report(object):
+class PbsReport(object):
     """ 
     Represents a run of the stacker
     """
 
     pattern = re.compile((
-        "^(\s+)Job Id:\s*(?P<job_id>\S+)$"
+        "^(\s+)Resource Usage on (?P<timestamp>\d{4}-\d\d-\d\d"
+        " \d\d:\d\d:\d\d):$"
+        "(\s+)Job Id:\s*(?P<job_id>\S+)$"
         "(\s+)Project:\s*(?P<project>\S+)$"
         "(\s+)Exit Status:\s*(?P<exit_status>\S+)$"
         "(\s+)Service Units:\s*(?P<service_units>\S+)$"
@@ -18,8 +20,8 @@ class Report(object):
         "(\s+)Memory Used:\s*(?P<memory_used>\S+)\s*$"
         "(\s+)Walltime requested:\s*(?P<walltime_requested>\d+:\d\d:\d\d)"
         "(\s+)Walltime Used:\s*(?P<walltime_used>\d+:\d\d:\d\d)\s*$"
-#        "(\s+)JobFS Requested:\s+(?P<jobfs_requested>\S+)"
-#        "(\s+)JobFS used:\s*(?P<jobfs_used>\S+)\s*$"
+        "(\s+)JobFS requested:\s+(?P<jobfs_requested>\S+)"
+        "(\s+)JobFS used:\s*(?P<jobfs_used>\S+)\s*$"
         ), re.MULTILINE)
 
     def __init__(self, o_file_path):
@@ -39,7 +41,9 @@ class Report(object):
 
 if __name__ == "__main__":
     path = sys.argv[1]
-    rep = Report(path)
+    rep = PbsReport(path)
+    for key in rep.__dict__:
+        print(key)
     print(rep.job_id)
     print(rep.project)
     print(rep.service_units)
