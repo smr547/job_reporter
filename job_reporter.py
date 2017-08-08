@@ -3,8 +3,8 @@
 Collect results from a Stacker Run and outputs a CSV file of results.
 See ``class PbsJobDir`` for info on the expected PBS output/working directory
 
-  usage: ./reporter.py path_to_PBS_job_dir [...]
-  help:  ./reporter.py --help 
+  usage: ./job_reporter.py path_to_PBS_job_dir [...]
+  help:  ./job_reporter.py --help 
 
 Steven Ring, Aug 2017
 """
