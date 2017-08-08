@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """
-Collect results from a Stacker Run and outputs a CSV file of results
+Collect results from a Stacker Run and outputs a CSV file of results.
+See ``class PbsJobDir`` for info on the expected PBS output/working directory
 
-  usage: python ./reporter.py path_to_PBS_job_dir [...]
+  usage: ./reporter.py path_to_PBS_job_dir [...]
+  help:  ./reporter.py --help 
 
 Steven Ring, Aug 2017
 """
@@ -11,19 +13,19 @@ import os
 import sys
 import re
 import glob
+import argparse
 from datetime import datetime
 from pathlib import Path
 
 def convert_to_iso8601(timestamp):
+    """
+    Ensure timestamps have a consistent, well known format
+    """
     try:
         result = re.sub('\s', 'T', self.timestamp)  # convert to ISO8601
     except:
         result = None
     return result
-
-class Error(object):
-    def __init__(self, error_message):
-        self.error_message = error_message
 
 class PbsJobDir(object):
     """
@@ -39,40 +41,47 @@ class PbsJobDir(object):
 
     def __init__(self, path):
         self.path = path
-        self._load_bin_file()
-        self._load_o_file()
-        self._load_e_file()
+        self.dir_errors = ""
+        self.bin_file = self._get_bin_file()
+        self.o_file = self._get_o_file()
+        self.e_file = self._get_e_file()
 
-    def _load_bin_file(self):
+    def _get_bin_file(self):
         binfiles = glob.glob(self.path + "/*.bin")
         if len(binfiles) != 1:
-            self.bin_file = Error("%s must contain one .bin file" % (self.path))
-        else:
-            self.bin_file = BinFile(binfiles[0])
+            self.dir_errors += "%s must contain one .bin file; " % (self.path)
+            return None
+        return BinFileParser(binfiles[0])
 
-    def _load_o_file(self):
+    def _get_o_file(self):
         ofiles = glob.glob(self.path + "/*.o*")
         if len(ofiles) != 1:
-            self.r_file = Error("%s must contain one .o file" % (self.path))
-        else:
-            self.r_file = StackerReport(ofiles[0])
+            self.dir_errors += "%s must contain one .o file; " % (self.path)
+            return None
+        return StackerStdoutParser(ofiles[0])
 
-    def _load_e_file(self):
+    def _get_e_file(self):
         efiles = glob.glob(self.path + "/*.e*")
         if len(efiles) != 1:
-            self.e_file = Error("%s must contain one .e file" % (self.path))
-        else:
-            self.e_file = ErrorFile(efiles[0])
+            self.dir_errors += "%s must contain one .e file; " % (self.path)
+            return None
+        return StderrParser(efiles[0])
 
     def get_values(self):
-        result = {}
-        result.update(self.bin_file.__dict__)
-        result.update(self.e_file.__dict__)
-        result.update(self.r_file.__dict__)
+        result = {"dir_errors": self.dir_errors}
+        if self.bin_file is not None:
+            result.update(self.bin_file.__dict__)
+        if self.e_file is not None:
+            result.update(self.e_file.__dict__)
+        if self.o_file is not None:
+            result.update(self.o_file.__dict__)
        
         return result
 
-class BinFile(object):
+class BinFileParser(object):
+    """
+    Collects some information from the .bin file in the output directory
+    """
     def __init__(self, path):
         self.bin_path = path
         self.submitted = datetime.utcfromtimestamp(os.path.getmtime(path)).isoformat()
@@ -82,19 +91,24 @@ class BinFile(object):
         self.product = fields[1]
         self.year = fields[3]
 
-class ErrorFile(object):
+class StderrParser(object):
+    """
+    Sniffs into stderr file looking for errors
+    """
+    pat = re.compile("ERROR")
     def __init__(self, path):
-        errors = 0
-        pat = re.compile("ERROR")
+        self.errors = 0
+        self.stderr_lines = 0
         with open(path, 'r') as infile:
             for line in infile:
-                if pat.search(line) is not None:
-                    errors += 1
-        self.errors = errors
+                self.stderr_lines += 1
+                if self.pat.search(line) is not None:
+                    self.errors += 1
         self.e_file_path = path
+        self.stderr_size = os.path.getsize(path)
         
 
-class PbsReport(object):
+class PbsReportParser(object):
     """ 
     Represents a run of the stacker
     """
@@ -118,6 +132,7 @@ class PbsReport(object):
 
     def __init__(self, o_file_path):
         self._parsefile(o_file_path, self.pbs_pattern)
+        self.stdout_size = os.path.getsize(o_file_path)
 
     def _parsefile(self, o_file_path, pattern):
         with open(o_file_path, 'r') as infile:
@@ -130,9 +145,9 @@ class PbsReport(object):
 #        else:
 #            print("Content did not match")
 
-class StackerReport(PbsReport):
+class StackerStdoutParser(PbsReportParser):
     """ 
-    Represents a run of the stacker
+    Extracts information reported by Stacker on stdout
     """
 
     stacker_pattern = re.compile((
@@ -140,25 +155,46 @@ class StackerReport(PbsReport):
         ), re.MULTILINE)
 
     def __init__(self, o_file_path):
-        super(StackerReport, self).__init__(o_file_path) 
+        super(StackerStdoutParser, self).__init__(o_file_path) 
         self._parsefile(o_file_path, self.stacker_pattern)
         self.finished = datetime.utcfromtimestamp(os.path.getmtime(o_file_path)).isoformat()
         self.job_no = Path(o_file_path).stem
         self.o_file_path = o_file_path
 
 
-if __name__ == "__main__":
 
-    default_keys = "satellite,year,submitted,finished,successful,failed,errors,cpu_used,walltime_used,memory_used,service_units,job_id,error_message"
+def main():
+    
+    # parser the arguments
 
-    paths = sys.argv[1:]
-    print(default_keys)
-    for path in paths:
+    default_keys = (
+        "satellite,year,submitted,finished,successful,failed,"
+        "errors,cpu_used,walltime_used,memory_used,service_units,"
+        "job_id,stdout_size,stderr_lines,stderr_size,dir_errors"
+    )
+    parser = argparse.ArgumentParser(description='Collect and output PBS job statistics')
+    parser.add_argument('-k', '--keys', help='comma separated list of keys', default=default_keys)
+    parser.add_argument('--keys_only', help='print the keys to be output', action='store_true')
+    parser.add_argument('--no_keys', help='supress the output of keys', action='store_true')
+    parser.add_argument('paths', nargs='*', help='paths to PBS output directory')
+    parser.set_defaults(no_keys=False, keys_only=False)
+    args = parser.parse_args()
+
+    # print the keys to be output
+
+    if not args.no_keys:
+        print(args.keys)
+    if args.keys_only:
+        sys.exit(0)
+
+    # collect data and output results
+
+    for path in args.paths:
         try:
             pbs_dir = PbsJobDir(path)
             result = pbs_dir.get_values()
             line = ""
-            for key in default_keys.split(","):
+            for key in args.keys.split(","):
                 if key in result:
                     line += str(result[key]) + "," 
                 else:
@@ -166,3 +202,7 @@ if __name__ == "__main__":
             print(line[:-1])
         except ValueError as e:
             sys.stderr.write(str(e)+"\n")
+
+
+if __name__ == "__main__":
+    main()
