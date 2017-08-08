@@ -69,6 +69,7 @@ class PbsJobDir(object):
         result.update(self.bin_file.__dict__)
         result.update(self.e_file.__dict__)
         result.update(self.r_file.__dict__)
+       
         return result
 
 class BinFile(object):
@@ -84,7 +85,7 @@ class BinFile(object):
 class ErrorFile(object):
     def __init__(self, path):
         errors = 0
-        pat = re.compile("- ERROR -")
+        pat = re.compile("ERROR")
         with open(path, 'r') as infile:
             for line in infile:
                 if pat.search(line) is not None:
