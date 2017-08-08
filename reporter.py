@@ -14,6 +14,17 @@ import glob
 from datetime import datetime
 from pathlib import Path
 
+def convert_to_iso8601(timestamp):
+    try:
+        result = re.sub('\s', 'T', self.timestamp)  # convert to ISO8601
+    except:
+        result = None
+    return result
+
+class Error(object):
+    def __init__(self, error_message):
+        self.error_message = error_message
+
 class PbsJobDir(object):
     """
     Represents the working diretory used by a PBS job. Files
@@ -35,20 +46,23 @@ class PbsJobDir(object):
     def _load_bin_file(self):
         binfiles = glob.glob(self.path + "/*.bin")
         if len(binfiles) != 1:
-            raise ValueError("%s must contain one .bin file" % self.path)
-        self.bin_file = BinFile(binfiles[0])
+            self.bin_file = Error("%s must contain one .bin file" % (self.path))
+        else:
+            self.bin_file = BinFile(binfiles[0])
 
     def _load_o_file(self):
         ofiles = glob.glob(self.path + "/*.o*")
         if len(ofiles) != 1:
-            raise ValueError("%s must contain one *.o* file" % self.path)
-        self.r_file = StackerReport(ofiles[0])
+            self.r_file = Error("%s must contain one .o file" % (self.path))
+        else:
+            self.r_file = StackerReport(ofiles[0])
 
     def _load_e_file(self):
         efiles = glob.glob(self.path + "/*.e*")
         if len(efiles) != 1:
-            raise ValueError("%s must contain one *.e* file" % (self.path))
-        self.e_file = ErrorFile(efiles[0])
+            self.e_file = Error("%s must contain one .e file" % (self.path))
+        else:
+            self.e_file = ErrorFile(efiles[0])
 
     def get_values(self):
         result = {}
@@ -111,9 +125,9 @@ class PbsReport(object):
         m = pattern.search(content)
         if m is not None:
             self.__dict__.update(m.groupdict())
-            self.timestamp = re.sub('\s', 'T', self.timestamp)  # convert to ISO8601
-        else:
-            print("Content did not match")
+            self.timestamp = convert_to_iso8601(self.timestamp)
+#        else:
+#            print("Content did not match")
 
 class StackerReport(PbsReport):
     """ 
@@ -134,7 +148,7 @@ class StackerReport(PbsReport):
 
 if __name__ == "__main__":
 
-    default_keys = "satellite,year,submitted,finished,successful,failed,errors,cpu_used,walltime_used,memory_used,service_units,job_id"
+    default_keys = "satellite,year,submitted,finished,successful,failed,errors,cpu_used,walltime_used,memory_used,service_units,job_id,error_message"
 
     paths = sys.argv[1:]
     print(default_keys)
