@@ -27,6 +27,13 @@ def convert_to_iso8601(timestamp):
         result = None
     return result
 
+def pbs_time_to_seconds(pbs_duration):
+    """
+    Convert hhh:mm:ss to seconds
+    """
+    fields = pbs_duration.split(':')
+    return int(fields[0])*60*60 + int(fields[1])*60 + int(fields[2])
+
 class PbsJobDir(object):
     """
     Represents the working diretory used by a PBS job. Files
@@ -133,6 +140,8 @@ class PbsReportParser(object):
     def __init__(self, o_file_path):
         self._parsefile(o_file_path, self.pbs_pattern)
         self.stdout_size = os.path.getsize(o_file_path)
+        self.cpu_utilisation = round(pbs_time_to_seconds(self.walltime_used) * 100
+            / pbs_time_to_seconds(self.cpu_used), 2)
 
     def _parsefile(self, o_file_path, pattern):
         with open(o_file_path, 'r') as infile:
@@ -169,7 +178,7 @@ def main():
 
     default_keys = (
         "satellite,year,submitted,finished,successful,failed,"
-        "errors,cpu_used,walltime_used,memory_used,service_units,"
+        "errors,ncpus_requested,ncpus_used,cpu_used,walltime_used,memory_used,service_units,cpu_utilisation,"
         "job_id,stdout_size,stderr_lines,stderr_size,dir_errors"
     )
     parser = argparse.ArgumentParser(description='Collect and output PBS job statistics')
