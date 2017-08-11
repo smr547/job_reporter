@@ -140,8 +140,8 @@ class PbsReportParser(object):
     def __init__(self, o_file_path):
         self._parsefile(o_file_path, self.pbs_pattern)
         self.stdout_size = os.path.getsize(o_file_path)
-        self.cpu_utilisation = round(pbs_time_to_seconds(self.walltime_used) * 100
-            / pbs_time_to_seconds(self.cpu_used), 2)
+        self.cpu_utilisation = round(pbs_time_to_seconds(self.cpu_used) * 100 
+            / (int(self.ncpus_used) * pbs_time_to_seconds(self.walltime_used)), 2)
 
     def _parsefile(self, o_file_path, pattern):
         with open(o_file_path, 'r') as infile:
@@ -178,7 +178,8 @@ def main():
 
     default_keys = (
         "satellite,year,submitted,finished,successful,failed,"
-        "errors,ncpus_requested,ncpus_used,cpu_used,walltime_used,memory_used,service_units,cpu_utilisation,"
+        "errors,ncpus_requested,ncpus_used,cpu_used,walltime_used,memory_used,"
+        "service_units,cpu_utilisation,"
         "job_id,stdout_size,stderr_lines,stderr_size,dir_errors"
     )
     parser = argparse.ArgumentParser(description='Collect and output PBS job statistics')
